@@ -14,7 +14,7 @@ namespace VrepWrapper
     public static class Vrep
     {
         
-        private const string dllpath =  "libraries/remoteApi.dll"; 
+        private const string dllpath = "libraries/remoteApi.dll";
 
         [DllImport(dllpath, CallingConvention = CallingConvention.Cdecl)]
         public static extern CommandReturnCodes simxTransferFile(int clientId, string filePathAndName,
@@ -29,7 +29,7 @@ namespace VrepWrapper
         private static extern void simxCallScriptFunction(int clientID, string scriptDescription, ScriptHandleOrType scriptHandleOrType, string functionName, int inIntCnt, int[] inIntptr, int inFloatCnt, float[] inFloat, int inStringCnt, string inString, int inBufferSize, string inBuffer, ref int outIntCnt, ref IntPtr outInt, ref int outFloatCnt, ref IntPtr outFloat, ref int outStringCnt, ref IntPtr outString, ref int outBufferSize, ref IntPtr outBuffer, RegularOperationMode operationMode);
 
 
-        public static void SimCallScriptFunction(int clientID, string scriptDescription, ScriptHandleOrType scriptHandleOrType, string functionName, int inIntCnt, int[] inIntptr, int inFloatCnt, float[] inFloat, int inStringCnt, string inString, int inBufferSize, string inBuffer, ref int[] outInt, ref float[] outFloat, ref int outStringCount, ref char[] outString, ref int outBufferCount, ref char[] outBuffer)
+        public static void SimCallScriptFunction(int clientID, string scriptDescription, ScriptHandleOrType scriptHandleOrType, string functionName, int inIntCnt, int[] inIntptr, int inFloatCnt, float[] inFloat, int inStringCnt, string inString, int inBufferSize, string inBuffer, ref int[] outInt, ref float[] outFloat, ref string[] outString, ref char[] outBuffer)
         {
             IntPtr outIntptr = IntPtr.Zero;
             int outIntCnt = 0;
@@ -41,36 +41,72 @@ namespace VrepWrapper
             int outBufferCnt = 0;
             simxCallScriptFunction(clientID, scriptDescription, scriptHandleOrType, functionName, inIntCnt, inIntptr, inFloatCnt, inFloat, inStringCnt, inString, inBufferSize, inBuffer, ref outIntCnt, ref outIntptr, ref outFloatCnt, ref outFloatptr, ref outStringCnt, ref outStringptr, ref outBufferCnt, ref outBufferptr, RegularOperationMode.SimxOpmodeBlocking);
 
-            int[] outIntIN = new int[outIntCnt];
-            float[] outFloatIN = new float[outFloatCnt];
-            char[] outStringIN = new char[outStringCnt];
-            char[] outBufferIN = new char[outBufferCnt];
+            outInt = new int[outIntCnt];
+            outFloat = new float[outFloatCnt];
+            outString = new string[outStringCnt];
+            outBuffer = new char[outBufferCnt];
 
             if (outIntptr != IntPtr.Zero)
             {
-                Marshal.Copy(outIntptr, outIntIN, 0, outIntCnt);
+                Marshal.Copy(outIntptr, outInt, 0, outIntCnt);
+
             }
             if (outFloatptr != IntPtr.Zero)
             {
-                Marshal.Copy(outFloatptr, outFloatIN, 0, outFloatCnt);
+                Marshal.Copy(outFloatptr, outFloat, 0, outFloatCnt);
             }
             if (outStringptr != IntPtr.Zero)
             {
-                Marshal.Copy(outStringptr, outStringIN, 0, outStringCnt);
+                for (int i = 0; i < outStringCnt; i++)
+                {
+                    int offset = 0;
+                    string currentString = null;
+                    while (true)
+                    {
+                        byte myByte = Marshal.ReadByte(outStringptr, offset);
+                        offset++;
+                        var c = Encoding.ASCII.GetString(new byte[] { myByte });
+                        if (c != "\0")
+                        {
+                            currentString += c;
+                        }
+                        else
+                        {
+                            outString[i] = currentString;
+                            break;
+                        }
+
+                    }
+
+                }
+
             }
 
+            byte[] dataBytes = new byte[outBufferCnt];
             if (outBufferptr != IntPtr.Zero)
             {
-                Marshal.Copy(outBufferptr, outBufferIN, 0, outBufferCnt);
+
+
+                int offset = 0;
+                while (true)
+                {
+                    var myByte = Marshal.ReadByte(outBufferptr, offset);
+                    if (myByte != 0)
+                    {
+                        dataBytes[offset] = myByte;
+                    }
+                    else
+                    {
+                        break;
+                    }
+
+                    offset++;
+                }
+
+
             }
+            outBuffer = Encoding.ASCII.GetChars(dataBytes);
 
-
-            outInt = outIntIN;
-            outFloat = outFloatIN;
-            outString = outStringIN;
-            outBuffer = outBufferIN;
-            outStringCount = outStringCnt;
-            outBufferCount = outBufferCnt;
         }
 
 
@@ -582,15 +618,15 @@ namespace VrepWrapper
             int[] inIntegers = { clientID }, outIntegers = { 0 };
             float[] inFloats = { }, outFloats = null;
             string inBuffer = null, inStrings = collectionName;
-            char[] outStrings = null;
+            string[] outStrings = null;
             char[] outBuffer = null;
 
-            int outIntCnt = 1, outFloatCnt = 0, outStringCnt = 0, outByteCnt = 0;
+            int outIntCnt = 1, outFloatCnt = 0;
 
 
 
             Vrep.SimCallScriptFunction(clientID, "IntersectionBase", Vrep.ScriptHandleOrType.sim_scripttype_childscript, "simxCreateCollection",
-                inIntegers.Length, inIntegers, inFloats.Length, inFloats, inStrings.Length, inStrings, 0, inBuffer, ref outIntegers, ref outFloats, ref outStringCnt, ref outStrings, ref outByteCnt, ref outBuffer);
+                inIntegers.Length, inIntegers, inFloats.Length, inFloats, inStrings.Length, inStrings, 0, inBuffer, ref outIntegers, ref outFloats, ref outStrings, ref outBuffer);
             Vrep.SimAddStatusbarMessage(clientID, "Created new collection: " + collectionName + " Handle: " + outIntegers[0]);
             return outIntegers[0];
         }
@@ -601,11 +637,12 @@ namespace VrepWrapper
             int[] inIntegers = { collectionHandle }, outIntegers = { 0 };
             float[] inFloats = { }, outFloats = null;
             string inBuffer = null, inStrings = null;
-            char[] outStrings = null, outBuffer = null;
+            string[] outStrings = null;
+            char[] outBuffer = null;
             int outIntCnt = 1, outFloatCnt = 0, outStringCnt = 0, outByteCnt = 0;
 
             Vrep.SimCallScriptFunction(clientID, "IntersectionBase", Vrep.ScriptHandleOrType.sim_scripttype_childscript, "simxEmptyCollection",
-                inIntegers.Length, inIntegers, inFloats.Length, inFloats, 0, inStrings, 0, inBuffer, ref outIntegers, ref outFloats, ref outStringCnt, ref outStrings, ref outByteCnt, ref outBuffer);
+                inIntegers.Length, inIntegers, inFloats.Length, inFloats, 0, inStrings, 0, inBuffer, ref outIntegers, ref outFloats, ref outStrings, ref outBuffer);
             Vrep.SimAddStatusbarMessage(clientID, "Deleted collection: " + inIntegers[0]);
             return outIntegers[0];
         }
@@ -613,7 +650,7 @@ namespace VrepWrapper
         public static int SimxAddObjectToCollection(int clientID, int collectionHandle, int objectHandle)
         {
             return SimxAddObjectToCollection(clientID, collectionHandle, objectHandle, specialArgumentValues.sim_handle_single,
-                  0);
+                0);
         }
         public static int SimxRemoveObjectFromCollection(int clientID, int collectionHandle, int objectHandle)
         {
@@ -628,11 +665,12 @@ namespace VrepWrapper
             int[] inIntegers = { collectionHandle, objectHandle, (int)what, options }, outIntegers = { 0 };
             float[] inFloats = { }, outFloats = null;
             string inBuffer = null, inStrings = null;
-            char[] outStrings = null, outBuffer = null;
-            int outIntCnt = 1, outFloatCnt = 0, outStringCnt = 0, outByteCnt = 0;
+            string[] outStrings = null;
+            char[] outBuffer = null;
+            int outIntCnt = 1, outFloatCnt = 0;
 
             Vrep.SimCallScriptFunction(clientID, "IntersectionBase", Vrep.ScriptHandleOrType.sim_scripttype_childscript, "simxAddObjectToCollection",
-                inIntegers.Length, inIntegers, inFloats.Length, inFloats, 0, inStrings, 0, inBuffer, ref outIntegers, ref outFloats, ref outStringCnt, ref outStrings, ref outByteCnt, ref outBuffer);
+                inIntegers.Length, inIntegers, inFloats.Length, inFloats, 0, inStrings, 0, inBuffer, ref outIntegers, ref outFloats, ref outStrings, ref outBuffer);
             Vrep.SimAddStatusbarMessage(clientID, "Collection Member added/removed: " + inIntegers[1]);
             return outIntegers[0];
         }
@@ -643,11 +681,12 @@ namespace VrepWrapper
             int[] inIntegers = { collectionHandle }, outIntegers = { 0 };
             float[] inFloats = { }, outFloats = null;
             string inBuffer = null, inStrings = null;
-            char[] outStrings = null, outBuffer = null;
-            int outIntCnt = 1, outFloatCnt = 0, outStringCnt = 0, outByteCnt = 0;
+            string[] outStrings = null;
+            char[] outBuffer = null;
+            int outIntCnt = 1, outFloatCnt = 0;
 
             Vrep.SimCallScriptFunction(clientID, "IntersectionBase", Vrep.ScriptHandleOrType.sim_scripttype_childscript, "simxRemoveCollection",
-                inIntegers.Length, inIntegers, inFloats.Length, inFloats, 0, inStrings, 0, inBuffer, ref outIntegers, ref outFloats, ref outStringCnt, ref outStrings, ref outByteCnt, ref outBuffer);
+                inIntegers.Length, inIntegers, inFloats.Length, inFloats, 0, inStrings, 0, inBuffer, ref outIntegers, ref outFloats, ref outStrings, ref outBuffer);
             Vrep.SimAddStatusbarMessage(clientID, "Collection removed " + inIntegers[0]);
             return outIntegers[0];
         }
@@ -658,11 +697,12 @@ namespace VrepWrapper
             int[] inIntegers = { entity1Handle, entity2Handle }, outIntegers = { 0 };
             float[] inFloats = { }, outFloats = null;
             string inBuffer = null, inStrings = null;
-            char[] outStrings = null, outBuffer = null;
-            int outIntCnt = 1, outFloatCnt = 0, outStringCnt = 0, outByteCnt = 0;
+            string[] outStrings = null;
+            char[] outBuffer = null;
+            int outIntCnt = 1, outFloatCnt = 0;
 
             Vrep.SimCallScriptFunction(clientID, "IntersectionBase", Vrep.ScriptHandleOrType.sim_scripttype_childscript, "simxCheckCollision",
-                inIntegers.Length, inIntegers, inFloats.Length, inFloats, 0, inStrings, 0, inBuffer, ref outIntegers, ref outFloats, ref outStringCnt, ref outStrings, ref outByteCnt, ref outBuffer);
+                inIntegers.Length, inIntegers, inFloats.Length, inFloats, 0, inStrings, 0, inBuffer, ref outIntegers, ref outFloats, ref outStrings, ref outBuffer);
             Vrep.SimAddStatusbarMessage(clientID, "Collision executed " + entity1Handle + " & " + entity2Handle + Convert.ToBoolean(outIntegers[0]));
             if (outIntegers[0] == -1)
             { throw new Exception("Vrep collision error (Handles correct?)"); }
@@ -676,11 +716,12 @@ namespace VrepWrapper
             int[] inIntegers = { ParentHandle }, outIntegers = { 0 };
             float[] inFloats = { cubesize_mm * 0.001f }, outFloats = null;
             string inBuffer = null, inStrings = null;
-            char[] outStrings = null, outBuffer = null;
-            int outIntCnt = 1, outFloatCnt = 0, outStringCnt = 0, outByteCnt = 0;
+            string[] outStrings = null;
+            char[] outBuffer = null;
+            int outIntCnt = 1, outFloatCnt = 0;
 
             Vrep.SimCallScriptFunction(clientID, "IntersectionBase", Vrep.ScriptHandleOrType.sim_scripttype_childscript, "simxCreateCube",
-                inIntegers.Length, inIntegers, inFloats.Length, inFloats, 0, inStrings, 0, inBuffer, ref outIntegers, ref outFloats, ref outStringCnt, ref outStrings, ref outByteCnt, ref outBuffer);
+                inIntegers.Length, inIntegers, inFloats.Length, inFloats, 0, inStrings, 0, inBuffer, ref outIntegers, ref outFloats, ref outStrings, ref outBuffer);
             //Vrep.SimAddStatusbarMessage(clientID, "created cube");
             if (outIntegers[0] == -1)
             { throw new Exception("Vrep Cube Creation Error (Handles correct?)"); }
@@ -695,11 +736,13 @@ namespace VrepWrapper
             int[] inIntegers = { ObjectHandle, (int)Property }, outIntegers = { 0 };
             float[] inFloats = { }, outFloats = null;
             string inBuffer = null, inStrings = null;
-            char[] outStrings = null, outBuffer = null;
-            int outIntCnt = 1, outFloatCnt = 0, outStringCnt = 0, outByteCnt = 0;
+            string[] outStrings = null;
+            char[] outBuffer = null;
+
+            int outIntCnt = 1, outFloatCnt = 0;
 
             Vrep.SimCallScriptFunction(clientID, "IntersectionBase", Vrep.ScriptHandleOrType.sim_scripttype_childscript, "simxSetObjectSpecialProperty",
-                inIntegers.Length, inIntegers, inFloats.Length, inFloats, 0, inStrings, 0, inBuffer, ref outIntegers, ref outFloats, ref outStringCnt, ref outStrings, ref outByteCnt, ref outBuffer);
+                inIntegers.Length, inIntegers, inFloats.Length, inFloats, 0, inStrings, 0, inBuffer, ref outIntegers, ref outFloats, ref outStrings, ref outBuffer);
             //Vrep.SimAddStatusbarMessage(clientID, "created cube");
             if (outIntegers[0] == -1)
             { throw new Exception("Vrep Property setting failed (ObjectHandles correct?)"); }
@@ -1023,7 +1066,8 @@ namespace VrepWrapper
             double _rad = _deg / ((double)180 / Math.PI);
             return _rad;
         }
-    }
+ 
+   }
 
     public class VRepCosy
     {
@@ -1039,13 +1083,23 @@ namespace VrepWrapper
         public double[] Position
         {
             get { return position; }
-            set { x = value[0]; y = value[1]; z = value[2]; }
+            set
+            {
+                x = value[0];
+                y = value[1];
+                z = value[2];
+            }
         }
 
         public double[] Orientation
         {
             get { return orientation; }
-            set { a = value[0]; b = value[1]; c = value[2]; }
+            set
+            {
+                a = value[0];
+                b = value[1];
+                c = value[2];
+            }
         }
 
         public double X { get; set; }
@@ -1063,8 +1117,8 @@ namespace VrepWrapper
             a = 0.0;
             b = 0.0;
             c = 0.0;
-            position = new double[] { 0.0, 0.0, 0.0 };
-            orientation = new double[] { 0.0, 0.0, 0.0 };
+            position = new double[] {0.0, 0.0, 0.0};
+            orientation = new double[] {0.0, 0.0, 0.0};
         }
 
         public VRepCosy(double _x, double _y, double _z, double _a, double _b, double _c)
@@ -1075,9 +1129,10 @@ namespace VrepWrapper
             a = _a;
             b = _b;
             c = _c;
-            position = new double[] { _x, _y, _z };
-            orientation = new double[] { _a, _b, _c };
+            position = new double[] {_x, _y, _z};
+            orientation = new double[] {_a, _b, _c};
         }
     }
+
 }
 
