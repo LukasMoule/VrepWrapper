@@ -50,7 +50,7 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Akomi.VrepWrapper.nuspec" />
+    <None Include="VrepWrapper.nuspec" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
