@@ -16,6 +16,10 @@ namespace VrepWrapper
         //
         private const string dllpath = "libraries/remoteApi.dll";
 
+
+        [DllImport(dllpath, CallingConvention = CallingConvention.Cdecl)]
+        public static extern CommandReturnCodes simxCloseScene(int clientID, RegularOperationMode operationMode);
+
         [DllImport(dllpath, CallingConvention = CallingConvention.Cdecl)]
         public static extern CommandReturnCodes simxTransferFile(int clientId, string filePathAndName,
             string fileName_serverSide, int timeout, RegularOperationMode operationMode);
@@ -26,10 +30,10 @@ namespace VrepWrapper
 
 
         [DllImport(dllpath, CallingConvention = CallingConvention.Cdecl)]
-        private static extern void simxCallScriptFunction(int clientID, string scriptDescription, ScriptHandleOrType scriptHandleOrType, string functionName, int inIntCnt, int[] inIntptr, int inFloatCnt, float[] inFloat, int inStringCnt, string inString, int inBufferSize, string inBuffer, ref int outIntCnt, ref IntPtr outInt, ref int outFloatCnt, ref IntPtr outFloat, ref int outStringCnt, ref IntPtr outString, ref int outBufferSize, ref IntPtr outBuffer, RegularOperationMode operationMode);
+        private static extern CommandReturnCodes simxCallScriptFunction(int clientID, string scriptDescription, ScriptHandleOrType scriptHandleOrType, string functionName, int inIntCnt, int[] inIntptr, int inFloatCnt, float[] inFloat, int inStringCnt, string inString, int inBufferSize, string inBuffer, ref int outIntCnt, ref IntPtr outInt, ref int outFloatCnt, ref IntPtr outFloat, ref int outStringCnt, ref IntPtr outString, ref int outBufferSize, ref IntPtr outBuffer, RegularOperationMode operationMode);
 
 
-        public static void SimCallScriptFunction(int clientID, string scriptDescription, ScriptHandleOrType scriptHandleOrType, string functionName, int inIntCnt, int[] inIntptr, int inFloatCnt, float[] inFloat, int inStringCnt, string inString, int inBufferSize, string inBuffer, ref int[] outInt, ref float[] outFloat, ref string[] outString, ref char[] outBuffer)
+        public static CommandReturnCodes SimCallScriptFunction(int clientID, string scriptDescription, ScriptHandleOrType scriptHandleOrType, string functionName, int inIntCnt, int[] inIntptr, int inFloatCnt, float[] inFloat, int inStringCnt, string inString, int inBufferSize, string inBuffer, ref int[] outInt, ref float[] outFloat, ref string[] outString, ref char[] outBuffer)
         {
             IntPtr outIntptr = IntPtr.Zero;
             int outIntCnt = 0;
@@ -39,7 +43,7 @@ namespace VrepWrapper
             int outStringCnt = 0;
             IntPtr outBufferptr = IntPtr.Zero;
             int outBufferCnt = 0;
-            simxCallScriptFunction(clientID, scriptDescription, scriptHandleOrType, functionName, inIntCnt, inIntptr, inFloatCnt, inFloat, inStringCnt, inString, inBufferSize, inBuffer, ref outIntCnt, ref outIntptr, ref outFloatCnt, ref outFloatptr, ref outStringCnt, ref outStringptr, ref outBufferCnt, ref outBufferptr, RegularOperationMode.SimxOpmodeBlocking);
+            var err = simxCallScriptFunction(clientID, scriptDescription, scriptHandleOrType, functionName, inIntCnt, inIntptr, inFloatCnt, inFloat, inStringCnt, inString, inBufferSize, inBuffer, ref outIntCnt, ref outIntptr, ref outFloatCnt, ref outFloatptr, ref outStringCnt, ref outStringptr, ref outBufferCnt, ref outBufferptr, RegularOperationMode.SimxOpmodeBlocking);
 
             outInt = new int[outIntCnt];
             outFloat = new float[outFloatCnt];
@@ -83,7 +87,7 @@ namespace VrepWrapper
             }
 
             byte[] dataBytes = new byte[outBufferCnt];
-            if (outBufferptr != IntPtr.Zero)
+            if (outBufferCnt != 0)
             {
 
 
@@ -107,12 +111,40 @@ namespace VrepWrapper
             }
             outBuffer = Encoding.ASCII.GetChars(dataBytes);
 
+            return err;
         }
 
+        public static List<Tuple<int, string>> SimGetModels(int clientID)
+        {
+            int[] objectHandles = null;
+            string[] objectNames = null;
+            List<Tuple<int, string>> models = new List<Tuple<int, string>>();
+            SimGetObjectNames(clientID, SceneObjectTypes.SimObjectShapeType, ref objectHandles, ref objectNames, RegularOperationMode.SimxOpmodeBlocking);
+            for (int i = 0; i < objectHandles.Length; i++)
+            {
+                int property = -1;
+                var err = simxGetModelProperty(clientID, objectHandles[i], ref property, RegularOperationMode.SimxOpmodeBlocking);
+                if (err != CommandReturnCodes.SimxReturnOk)
+                {
+                    continue;
+                }
+                else
+                {
+                    if (property == 61440)
+                    {
 
+                    }
+                    else
+                    {
+                        models.Add(new Tuple<int, string>(objectHandles[i], objectNames[i]));
+                    }
+                }
+            }
+            return models;
+        }
 
         [DllImport(dllpath, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void simxGetModelProperty(int clientId, int objectHandle, ref int property, RegularOperationMode operationMode);
+        public static extern CommandReturnCodes simxGetModelProperty(int clientId, int objectHandle, ref int property, RegularOperationMode operationMode);
 
         public static void SimGetObjectPoses(int clientId, SceneObjectTypes objectTypes, ref int[] objectHandles, ref float[][] objectPoses)
         {
@@ -133,13 +165,13 @@ namespace VrepWrapper
                 ref intDataCount, ref intDataPtr, ref positionDataCount, ref positionDataPtr, ref stringDataCount,
                 ref stringDataPtr, Vrep.RegularOperationMode.SimxOpmodeBlocking);
 
-            if (objectCount != 0)
+            if (objectCount > 0)
             {
                 objectHandles = new int[objectCount];
                 Marshal.Copy(objectHandlesPtr, objectHandles, 0, objectCount);
             }
 
-            if (positionDataCount != 0)
+            if (positionDataCount > 0)
             {
                 objectPoses = new float[objectCount][];
                 float[] currentFloatData = new float[positionDataCount];
@@ -154,13 +186,13 @@ namespace VrepWrapper
                 ref intDataCount, ref intDataPtr, ref orientationDataCount, ref orientationDataPtr, ref stringDataCount,
                 ref stringDataPtr, Vrep.RegularOperationMode.SimxOpmodeBlocking);
 
-            if (objectCount != 0)
+            if (objectCount > 0)
             {
                 objectHandles = new int[objectCount];
                 Marshal.Copy(objectHandlesPtr, objectHandles, 0, objectCount);
             }
 
-            if (orientationDataCount != 0)
+            if (orientationDataCount > 0)
             {
                 float[] currentOrientationData = new float[orientationDataCount];
                 Marshal.Copy(orientationDataPtr, currentOrientationData, 0, orientationDataCount);
@@ -187,18 +219,18 @@ namespace VrepWrapper
             IntPtr floatDataPtr = IntPtr.Zero;
             IntPtr stringDataPtr = IntPtr.Zero;
 
-            simxGetObjectGroupData(clientId, objectTypes, 0, ref objectCount, ref objectHandlesPtr,
+            var err = simxGetObjectGroupData(clientId, objectTypes, 0, ref objectCount, ref objectHandlesPtr,
                 ref intDataCount, ref intDataPtr, ref floatDataCount, ref floatDataPtr, ref stringDataCount,
                 ref stringDataPtr, Vrep.RegularOperationMode.SimxOpmodeBlocking);
 
 
-            if (objectCount != 0)
+            if (objectCount > 0)
             {
                 objectHandles = new int[objectCount];
                 Marshal.Copy(objectHandlesPtr, objectHandles, 0, objectCount);
             }
 
-            if (stringDataCount != 0)
+            if (stringDataCount > 0)
             {
                 //   byte[] receivedWords = new byte[100000];
                 int offset = 0;
@@ -232,7 +264,7 @@ namespace VrepWrapper
         }
 
         [DllImport(dllpath, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void simxGetObjectGroupData(int clientId, SceneObjectTypes objectTypes, int dataType, ref int objectCount, ref IntPtr objectHandles, ref int intDataCount, ref IntPtr intData, ref int floatDataCount, ref IntPtr floatData, ref int stringDataCount, ref IntPtr stringData, RegularOperationMode operationMode);
+        public static extern CommandReturnCodes simxGetObjectGroupData(int clientId, SceneObjectTypes objectTypes, int dataType, ref int objectCount, ref IntPtr objectHandles, ref int intDataCount, ref IntPtr intData, ref int floatDataCount, ref IntPtr floatData, ref int stringDataCount, ref IntPtr stringData, RegularOperationMode operationMode);
 
         public static int[] SimGetObjects(int clientId, int objectTypes, RegularOperationMode operationMode)
         {
@@ -252,18 +284,34 @@ namespace VrepWrapper
         [DllImport(dllpath, CallingConvention = CallingConvention.Cdecl)]
         public static extern void simxGetObjects(int clientID, int objectTypes, ref int objectCount, ref IntPtr objectHandles, RegularOperationMode operation);
 
+        public static float[] CallGetObjectPose(int clientID, int objectHandle, int relativeToObjectHandle)
+        {
+            int[] inInt = new int[2];
+            inInt[0] = objectHandle;
+            inInt[1] = relativeToObjectHandle;
+            int[] outInt = null;
+            float[] outFloat = null;
+            string[] outString = null;
+            char[] outBuffer = null;
+            SimCallScriptFunction(clientID, "DefaultCamera", ScriptHandleOrType.sim_scripttype_customizationscript,
+                "GetObjectPose", 2, inInt, 0, null, 0, null, 0, null,
+                ref outInt, ref outFloat, ref outString, ref outBuffer);
+
+            if (outFloat[0] != null)
+            {
+                return outFloat;
+            }
+            else
+            {
+                return new float[] { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+            }
+        }
+
         [DllImport(dllpath, CallingConvention = CallingConvention.Cdecl)]
         public static extern CommandReturnCodes simxGetObjectOrientation(int clientID, int objectHandle, int relativeToObjectHandle, ref float[] orientation, RegularOperationMode operationMode);
 
-        /* public static float[] simGetObjectPostion(int clientID, int objectHandle, int relativeToObjectHandle)
-          {
-              float[] position = null ;
-              Vrep.simxGetObjectPosition(clientID, objectHandle, relativeToObjectHandle, ref position, RegularOperationMode.SimxOpmodeBlocking);
-              return position;
-          }*/
-
         [DllImport(dllpath, CallingConvention = CallingConvention.Cdecl)]
-        public static extern CommandReturnCodes simxGetObjectPosition(int clientID, int objectHandle, int relativeToObjectHandle, ref float position, RegularOperationMode operationMode);
+        public static extern CommandReturnCodes simxGetObjectPosition(int clientID, int objectHandle, int relativeToObjectHandle, float[] position, RegularOperationMode operationMode);
 
         [DllImport(dllpath, CallingConvention = CallingConvention.Cdecl)]
         public static extern void simxCreateDummy(int clientID, float size, char[] color, out int dummyHandle, RegularOperationMode operationMode);
@@ -276,6 +324,9 @@ namespace VrepWrapper
 
         [DllImport(dllpath, CallingConvention = CallingConvention.Cdecl)]
         public static extern void simxRemoveObject(int clientID, int objectHandle, RegularOperationMode operationMode);
+
+        [DllImport(dllpath, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void simxRemoveModel(int clientID, int objectHandle, RegularOperationMode operationMode);
 
         [DllImport(dllpath, CallingConvention = CallingConvention.Cdecl)]
         public static extern void simxSetObjectOrientation(int clientID, int handle, int relativeToObjectHandle, float[] orientation, RegularOperationMode operationMode);
@@ -375,6 +426,7 @@ namespace VrepWrapper
         /// <param name="clientId">the client ID. refer to simxStart.</param>
         /// <param name="objectName">name of the object. If possible, don't rely on the automatic name adjustment mechanism, and always specify the full object name, including the #: if the object is "myJoint", specify "myJoint#", if the object is "myJoint#0", specify "myJoint#0", etc. </param>
         /// <returns>a value that will receive the handle</returns>
+
         public static int SimGetObjectHandle(int clientId, string objectName)
         {
             int handle;
@@ -650,7 +702,7 @@ namespace VrepWrapper
         public static int SimxAddObjectToCollection(int clientID, int collectionHandle, int objectHandle)
         {
             return SimxAddObjectToCollection(clientID, collectionHandle, objectHandle, specialArgumentValues.sim_handle_single,
-                0);
+                  0);
         }
         public static int SimxRemoveObjectFromCollection(int clientID, int collectionHandle, int objectHandle)
         {
@@ -1066,71 +1118,52 @@ namespace VrepWrapper
             double _rad = _deg / ((double)180 / Math.PI);
             return _rad;
         }
- 
-   }
 
-    public class VRepCosy
-    {
-        private double x;
-        private double y;
-        private double z;
-        private double a;
-        private double b;
-        private double c;
-        private double[] position;
-        private double[] orientation;
-
-        public double[] Position
+        public class VRepCosy
         {
-            get { return position; }
-            set
+            double x;
+            double y;
+            double z;
+
+            double a;
+            double b;
+            double c;
+           
+            public double[] Position
             {
-                x = value[0];
-                y = value[1];
-                z = value[2];
+                get
+                {
+                    return new double[] { x, y, z };
+                }
+                set
+                {
+                    x = value[0];
+                    y = value[1];
+                    z = value[2];
+                }
             }
-        }
-
-        public double[] Orientation
-        {
-            get { return orientation; }
-            set
+            public double[] Orientation
             {
-                a = value[0];
-                b = value[1];
-                c = value[2];
+                get
+                {
+                    return new double[] { a, b, c };
+                }
+                set
+                {
+                    a=value[0];
+                    b=value[1];
+                    c = value[2];
+                }
             }
-        }
-
-        public double X { get; set; }
-        public double Y { get; set; }
-        public double Z { get; set; }
-        public double A { get; set; }
-        public double B { get; set; }
-        public double C { get; set; }
-
-        public VRepCosy()
-        {
-            x = 0.0;
-            y = 0.0;
-            z = 0.0;
-            a = 0.0;
-            b = 0.0;
-            c = 0.0;
-            position = new double[] {0.0, 0.0, 0.0};
-            orientation = new double[] {0.0, 0.0, 0.0};
-        }
-
-        public VRepCosy(double _x, double _y, double _z, double _a, double _b, double _c)
-        {
-            x = _x;
-            y = _y;
-            z = _z;
-            a = _a;
-            b = _b;
-            c = _c;
-            position = new double[] {_x, _y, _z};
-            orientation = new double[] {_a, _b, _c};
+            public VRepCosy(double _x, double _y, double _z, double _a, double _b, double _c)
+            {
+                x = _x;
+                y = _y;
+                z = _z;
+                a = _a;
+                b = _b;
+                c = _c;
+            }
         }
     }
 
